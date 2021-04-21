@@ -23,7 +23,7 @@ get_tx<-function(project){
 			data.category='Transcriptome Profiling',
 			data.type='Gene Expression Quantification',
 			workflow.type='HTSeq - Counts')
-	GDCdownload(query)
+	GDCdownload(query,directory='./GDCdata')
 	dta<-GDCprepare(query=query)
 	return(dta)
 }
@@ -32,7 +32,7 @@ get_miRNA<-function(project){
 	query<-GDCquery(project,
 			data.category='Transcriptome Profiling',
 			data.type='miRNA Expression Quantification')
-	GDCdownload(query)
+	GDCdownload(query,directory='./GDCdata')
 	dta<-GDCprepare(query=query)
 	return(dta)
 }
@@ -41,9 +41,9 @@ get_mth<-function(project){
 	query<-GDCquery(project,
 			data.category='DNA Methylation',
 			platform='Illumina Human Methylation 450')
-	#GDCdownload(query)
-	tryCatch(GDCdownload(query,files.per.chunk = 10),
-		     error = function(e) GDCdownload(query,files.per.chunk=5))
+	#GDCdownload(query,directory='GDCdata')
+	tryCatch(GDCdownload(query,files.per.chunk = 10,directory='./GDCdata'),
+		     error = function(e) GDCdownload(query,files.per.chunk=5,directory='./GDCdata'))
 	dta<-GDCprepare(query=query)
 	return(dta)
 }
@@ -52,7 +52,7 @@ get_cnv<-function(project){
 	query<-GDCquery(project,
 			data.category='Copy Number Variation',
 			data.type='Copy Number Segment')
-	GDCdownload(query)
+	GDCdownload(query,directory='./GDCdata')
 	dta<-GDCprepare(query=query)
 	return(dta)
 }
@@ -75,7 +75,7 @@ get_clinic<-function(project){
 			data.type='Clinical Supplement',
 			data.format='BCR Biotab'
 	)
-	GDCdownload(query)
+	GDCdownload(query,directory='./GDCdata')
 	dta<-GDCprepare(query=query)
 	return(dta)
 }

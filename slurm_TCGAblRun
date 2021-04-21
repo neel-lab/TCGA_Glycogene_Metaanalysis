@@ -2,7 +2,7 @@
 #SBATCH --partition=general-compute --qos general-compute
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
-#SBATCH --array=0-32
+#SBATCH --array=0-32%6
 #SBATCH --cpus-per-task=1
 #SBATCH --tasks-per-node=8
 #SBATCH --mem=48000
@@ -25,10 +25,10 @@ ulimit -s unlimited
 # Modules:
 module load R/4.0.2-horae
 
-TCGA_Projects=($(ls ./data_sets/reference/tcga_projects))
+TCGA_Projects=($(cat ./data_sets/reference/tcga_projects))
 
 cur_proj=${TCGA_Projects[${SLURM_ARRAY_TASK_ID}]}
-Rscript TCGAbl_gather_data.R ${cur_proj}
+Rscript ./TCGAbl_gather_data.R ${cur_proj}
 
 echo "Processed ${cur_proj} and saved to data_sets"
 echo "All done!"
