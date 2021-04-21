@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --partition=general-compute --qos general-compute
+#SBATCH --time=12:00:00
+#SBATCH --nodes=1
+#SBATCH --array=0-32
+#SBATCH --cpus-per-task=1
+#SBATCH --tasks-per-node=8
+#SBATCH --mem=48000
+#SBATCH --output=slurm-%A_%a.out
+##SBATCH --mail-user=tgroth@buffalo.edu
+##SBATCH --mail-type=ALL
+##SBATCH --requeue
+#Specifies that the job will be requeued after a node failure.
+
+echo "SLURM_JOBID="$SLURM_JOBID
+echo "SLURM_JOB_NODELIST"=$SLURM_JOB_NODELIST
+echo "SLURM_NNODES"=$SLURM_NNODES
+echo "SLURMTMPDIR="$SLURMTMPDIR
+
+cd $SLURM_SUBMIT_DIR
+echo "working directory = "$SLURM_SUBMIT_DIR
+
+ulimit -s unlimited
+
+# Modules:
+module load R/4.0.2-horae
+
+TCGA_Projects=($(ls ./data_sets/reference/tcga_projects))
+
+cur_proj=${TCGA_Projects[${SLURM_ARRAY_TASK_ID}]}
+Rscript TCGAbl_gather_data.R ${cur_proj}
+
+echo "Processed ${cur_proj} and saved to data_sets"
+echo "All done!"
