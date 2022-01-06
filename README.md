@@ -1,6 +1,10 @@
 # TCGA Glycogene Metaanalysis
 Scripts and Pipelines used to analyze the TCGA for patterns in Glycogene Expression across Cancer Types
 
+## Data Gathering Using TCGABiolinks:
+
+The "TCGAbl_gather_data.R" gathers TCGA data if passed a valid TCGA code.  If in an HPC environment all datasets can be downloaded simultaneously using independent processes using a slurm script formatted in a manner similarly to "slurm_TCGAblRun" script.  The TCGAbl_gather_data.R script utilizes functions in the "TCGAbl_functions.R" file.
+
 ## Directories:
 
 ### glycoBio_data:
