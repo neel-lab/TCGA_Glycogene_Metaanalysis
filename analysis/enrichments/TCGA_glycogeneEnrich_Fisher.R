@@ -136,6 +136,86 @@ test_pathways_bin<-function(dedata,logFC_ecdf,adjP_thresh,pathways_list,high){
 	return(enrichmentTests)
 }
 
+#Enricher Main:
+
+do_enrich<-function(dedata,glycogenes,geneSet){
+	#Define logFC and padj thresholds:
+	logFC_lowthresh=log(1/2)
+	logFC_highthresh=log(2)
+	p.adj.thresh=0.05
+	#Parse glycogene Data:
+	glycogene_dedata<-dedata %>% dplyr::filter(geneName %in% glycogenes)
+	# Gene Set Enrichments:
+	# - Entire Genome:
+	pathwayEnrich_wholeGenome_upreg<-test_pathways(dedata,logFC_highthresh,p.adj.thresh,geneSet,high=T)
+	pathwayEnrich_wholeGenome_downreg<-test_pathways(dedata,logFC_lowthresh,p.adj.thresh,geneSet,high=F)
+	# - Glycogene-Centered:
+	pathwayEnrich_glycogeneCentered_upreg<-test_pathways(glycogene_dedata,logFC_highthresh,p.adj.thresh,geneSet,high=T)
+	pathwayEnrich_glycogeneCentered_downreg<-test_pathways(glycogene_dedata,logFC_lowthresh,p.adj.thresh,geneSet,high=F)
+	
+	#Organize into list:
+	dta_out<-list(
+		      'genome'=list('up'=pathwayEnrich_wholeGenome_upreg,'down'=pathwayEnrich_wholeGenome_downreg),
+		      'glycogene'=list('up'=pathwayEnrich_glycogeneCentered_upreg,'down'=pathwayEnrich_glycogeneCentered_downreg)
+	      )
+	return(dta_out)
+}
+
+
+do_enrich_purity<-function(dedata,glycogenes,geneSet){
+	#Define logFC and padj thresholds:
+	logFC_ecdf=ecdf(dedata$logFC)
+	p.adj.thresh=0.05
+	#Parse glycogene Data:
+	glycogene_dedata<-dedata %>% dplyr::filter(geneName %in% glycogenes)
+	# Gene Set Enrichments:
+	# - Entire Genome:
+	pathwayEnrich_wholeGenome_upreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,geneSet,high=T)
+	pathwayEnrich_wholeGenome_downreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,geneSet,high=F)
+	# - Glycogene-Centered:
+	pathwayEnrich_glycogeneCentered_upreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,geneSet,high=T)
+	pathwayEnrich_glycogeneCentered_downreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,geneSet,high=F)
+	
+	#Organize into list:
+	dta_out<-list(
+		      'genome'=list('up'=pathwayEnrich_wholeGenome_upreg,'down'=pathwayEnrich_wholeGenome_downreg),
+		      'glycogene'=list('up'=pathwayEnrich_glycogeneCentered_upreg,'down'=pathwayEnrich_glycogeneCentered_downreg)
+	      )
+	return(dta_out)
+}
+
+
+# All Group Wrapper:
+
+DE_data_enrichWrapper<-function(DEResults,glycogenes,pathwayList,functionList){
+	#Loops through each set of differential expression analysis
+	# performed on each cancer type and does enrichment.
+	# Each cancer must have a "shortLetterCode" set, which is the 
+	# tumor vs normal differential expression data
+	# Other cancers may have more molecular subtypes/clinical metadata to
+	# test, and will be stored.
+	enrich_results<-lapply(DEResults,function(deset){
+		#Main effects:
+		main_data<-deset$DE_Main
+		main_data_names<-names(main_data)
+		main_enrichments<-lapply(main_data,function(m_deset){
+				enrichSet_pathway<-do_enrich(m_deset,glycogenes,pathwayList)
+				enrichSet_function<-do_enrich(m_deset,glycogenes,functionList)
+				enrichSet=list('Pathways'=enrichSet_pathway,'Functions'=enrichSet_function)
+				return(enrichSet)
+		 });names(main_enrichments)<-main_data_names
+		#Purity effects:
+		purity_data<-deset$DE_purity
+		purity_enrichments_pathway<-do_enrich_purity(purity_data,glycogenes,pathwayList)
+		purity_enrichments_function<-do_enrich_purity(purity_data,glycogenes,functionList)
+		purity_enrichments<-list('purity'=list('Pathways'=purity_enrichments_pathway,'Function'=purity_enrichments_function))
+		#Concatenate enrichment lists:
+		total_enrich<-c(main_enrichments,purity_enrichments)
+		return(total_enrich)
+      });names(enrich_results)<-names(DEResults)
+      return(enrich_results)
+}
+
 # -------- Execution ----------
 
 args=commandArgs(trailing=T)
@@ -143,84 +223,85 @@ inFile=args[1]
 #Load Differential Expression Analysis:
 load(inFile)
 ctype <- sub('(TCGA\\-\\D+)\\_.*','\\1',basename(inFile))
+enrichments<-DE_data_enrichWrapper(DEResults,glycogenes,pathwayList,functionList)
+save(file=file.path('analysis/enrichments',paste(ctype,'enrichments.rda',sep='_')),enrichments)
 
 #Gather DE Data:
-dedata<-get_tumorVnormal(DEResults)
-dedata_purity<-get_tumorPurityEffects(DEResults)
-#Glycogene-specific DE data:
-glycogene_dedata<-get_glycogene_dedata(dedata,glycogenes)
-glycogene_dedata_purity<-get_glycogene_dedata(dedata_purity,glycogenes)
-
-#Define logFC and padj thresholds:
-logFC_lowthresh=log(1/2)
-logFC_highthresh=log(2)
-logFC_ecdf=ecdf(dedata_purity$logFC)
-p.adj.thresh=0.05
-
-# Glycosylation Pathway Enrichments:
-# - Entire Genome:
-pathwayEnrich_wholeGenome_upreg<-test_pathways(dedata,logFC_highthresh,p.adj.thresh,pathwayList,high=T)
-pathwayEnrich_wholeGenome_downreg<-test_pathways(dedata,logFC_lowthresh,p.adj.thresh,pathwayList,high=F)
-pathwayEnrich_wholeGenome_purity_upreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,pathwayList,high=T)
-pathwayEnrich_wholeGenome_purity_downreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,pathwayList,high=F)
-# - Glycogene-Centered:
-pathwayEnrich_glycogeneCentered_upreg<-test_pathways(glycogene_dedata,logFC_highthresh,p.adj.thresh,pathwayList,high=T)
-pathwayEnrich_glycogeneCentered_downreg<-test_pathways(glycogene_dedata,logFC_lowthresh,p.adj.thresh,pathwayList,high=F)
-pathwayEnrich_glycogeneCentered_purity_upreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,pathwayList,high=T)
-pathwayEnrich_glycogeneCentered_purity_downreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,pathwayList,high=F)
-
-# Glycogene Function Enrichments:
-# - Entire Genome:
-functionEnrich_wholeGenome_upreg<-test_pathways(dedata,logFC_highthresh,p.adj.thresh,functionList,high=T)
-functionEnrich_wholeGenome_downreg<-test_pathways(dedata,logFC_lowthresh,p.adj.thresh,functionList,high=F)
-functionEnrich_wholeGenome_purity_upreg<-test_pathways_bin(dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=T)
-functionEnrich_wholeGenome_purity_downreg<-test_pathways_bin(dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=F)
-# - Glycogene-Centered:
-functionEnrich_glycogeneCentered_upreg<-test_pathways(glycogene_dedata,logFC_highthresh,p.adj.thresh,functionList,high=T)
-functionEnrich_glycogeneCentered_downreg<-test_pathways(glycogene_dedata,logFC_lowthresh,p.adj.thresh,functionList,high=F)
-functionEnrich_glycogeneCentered_purity_upreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=T)
-functionEnrich_glycogeneCentered_purity_downreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=F)
-
-#Create Results List:
-# Pathways:
-# | --> genome --> tumorVnormal/purity --> up/down
-# | --> glycogene --> tumorVnormal/purity --> up/down
-# Functions:
-# | --> genome --> tumorVnormal/purity --> up/down
-# | --> glycogene --> tumorVnormal/purity --> up/down
-
-enrichments<-list(
-	'Pathways'=list('genome'=list(
-				'tumorVnormal'=list('up'=pathwayEnrich_wholeGenome_upreg,
-				     'down'=pathwayEnrich_wholeGenome_downreg
-				     ),
-				'purity'=list('up'=pathwayEnrich_wholeGenome_purity_upreg,
-				     'down'=pathwayEnrich_wholeGenome_purity_downreg
-				     )),
-	       		'glycogene'=list(
-				'tumorVnormal'=list('up'=pathwayEnrich_glycogeneCentered_upreg,
-					 'down'=pathwayEnrich_glycogeneCentered_downreg
-					 ),
-				'purity'=list('up'=pathwayEnrich_glycogeneCentered_purity_upreg,
-					 'down'=pathwayEnrich_glycogeneCentered_purity_downreg
-					 )
-			)),
-
-	'Functions'=list('genome'=list(
-				'tumorVnormal'=list('up'=functionEnrich_wholeGenome_upreg,
-				     'down'=functionEnrich_wholeGenome_downreg
-				     ),
-				'purity'=list('up'=functionEnrich_wholeGenome_purity_upreg,
-				     'down'=functionEnrich_wholeGenome_purity_downreg
-				     )),
-	       		'glycogene'=list(
-				'tumorVnormal'=list('up'=functionEnrich_glycogeneCentered_upreg,
-					 'down'=functionEnrich_glycogeneCentered_downreg
-					 ),
-				'purity'=list('up'=functionEnrich_glycogeneCentered_purity_upreg,
-					 'down'=functionEnrich_glycogeneCentered_purity_downreg
-					 ))
-			)
-)
-
-save(file=file.path('analysis/enrichments',paste(ctype,'enrichments.rda',sep='_')),enrichments)
+#dedata<-get_tumorVnormal(DEResults)
+#dedata_purity<-get_tumorPurityEffects(DEResults)
+##Glycogene-specific DE data:
+#glycogene_dedata<-get_glycogene_dedata(dedata,glycogenes)
+#glycogene_dedata_purity<-get_glycogene_dedata(dedata_purity,glycogenes)
+#
+##Define logFC and padj thresholds:
+#logFC_lowthresh=log(1/2)
+#logFC_highthresh=log(2)
+#logFC_ecdf=ecdf(dedata_purity$logFC)
+#p.adj.thresh=0.05
+#
+## Glycosylation Pathway Enrichments:
+## - Entire Genome:
+#pathwayEnrich_wholeGenome_upreg<-test_pathways(dedata,logFC_highthresh,p.adj.thresh,pathwayList,high=T)
+#pathwayEnrich_wholeGenome_downreg<-test_pathways(dedata,logFC_lowthresh,p.adj.thresh,pathwayList,high=F)
+#pathwayEnrich_wholeGenome_purity_upreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,pathwayList,high=T)
+#pathwayEnrich_wholeGenome_purity_downreg<-test_pathways_bin(dedata,logFC_ecdf,p.adj.thresh,pathwayList,high=F)
+## - Glycogene-Centered:
+#pathwayEnrich_glycogeneCentered_upreg<-test_pathways(glycogene_dedata,logFC_highthresh,p.adj.thresh,pathwayList,high=T)
+#pathwayEnrich_glycogeneCentered_downreg<-test_pathways(glycogene_dedata,logFC_lowthresh,p.adj.thresh,pathwayList,high=F)
+#pathwayEnrich_glycogeneCentered_purity_upreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,pathwayList,high=T)
+#pathwayEnrich_glycogeneCentered_purity_downreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,pathwayList,high=F)
+#
+## Glycogene Function Enrichments:
+## - Entire Genome:
+#functionEnrich_wholeGenome_upreg<-test_pathways(dedata,logFC_highthresh,p.adj.thresh,functionList,high=T)
+#functionEnrich_wholeGenome_downreg<-test_pathways(dedata,logFC_lowthresh,p.adj.thresh,functionList,high=F)
+#functionEnrich_wholeGenome_purity_upreg<-test_pathways_bin(dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=T)
+#functionEnrich_wholeGenome_purity_downreg<-test_pathways_bin(dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=F)
+## - Glycogene-Centered:
+#functionEnrich_glycogeneCentered_upreg<-test_pathways(glycogene_dedata,logFC_highthresh,p.adj.thresh,functionList,high=T)
+#functionEnrich_glycogeneCentered_downreg<-test_pathways(glycogene_dedata,logFC_lowthresh,p.adj.thresh,functionList,high=F)
+#functionEnrich_glycogeneCentered_purity_upreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=T)
+#functionEnrich_glycogeneCentered_purity_downreg<-test_pathways_bin(glycogene_dedata_purity,logFC_ecdf,p.adj.thresh,functionList,high=F)
+#
+##Create Results List:
+## Pathways:
+## | --> genome --> tumorVnormal/purity --> up/down
+## | --> glycogene --> tumorVnormal/purity --> up/down
+## Functions:
+## | --> genome --> tumorVnormal/purity --> up/down
+## | --> glycogene --> tumorVnormal/purity --> up/down
+#
+#enrichments<-list(
+#	'Pathways'=list('genome'=list(
+#				'tumorVnormal'=list('up'=pathwayEnrich_wholeGenome_upreg,
+#				     'down'=pathwayEnrich_wholeGenome_downreg
+#				     ),
+#				'purity'=list('up'=pathwayEnrich_wholeGenome_purity_upreg,
+#				     'down'=pathwayEnrich_wholeGenome_purity_downreg
+#				     )),
+#	       		'glycogene'=list(
+#				'tumorVnormal'=list('up'=pathwayEnrich_glycogeneCentered_upreg,
+#					 'down'=pathwayEnrich_glycogeneCentered_downreg
+#					 ),
+#				'purity'=list('up'=pathwayEnrich_glycogeneCentered_purity_upreg,
+#					 'down'=pathwayEnrich_glycogeneCentered_purity_downreg
+#					 )
+#			)),
+#
+#	'Functions'=list('genome'=list(
+#				'tumorVnormal'=list('up'=functionEnrich_wholeGenome_upreg,
+#				     'down'=functionEnrich_wholeGenome_downreg
+#				     ),
+#				'purity'=list('up'=functionEnrich_wholeGenome_purity_upreg,
+#				     'down'=functionEnrich_wholeGenome_purity_downreg
+#				     )),
+#	       		'glycogene'=list(
+#				'tumorVnormal'=list('up'=functionEnrich_glycogeneCentered_upreg,
+#					 'down'=functionEnrich_glycogeneCentered_downreg
+#					 ),
+#				'purity'=list('up'=functionEnrich_glycogeneCentered_purity_upreg,
+#					 'down'=functionEnrich_glycogeneCentered_purity_downreg
+#					 ))
+#			)
+#)
+#

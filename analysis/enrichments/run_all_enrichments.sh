@@ -15,6 +15,6 @@ do
 done
 
 #Merge the results into a .tsv file:
-mergeScript=analysis/enrichments/TCGA_mergeEnrich.R
+#mergeScript=analysis/enrichments/TCGA_mergeEnrich.R
 
 Rscript ${mergeScript}
