@@ -24,6 +24,8 @@ The output from this pipeline will be two files: "pathwayList.rda" and "function
 This directory contains analysis scripts for each section of the manuscript:
 
 - t-SNE embeddings
+- Consensus Clustering
 - Differential expression analysiss
 - Enrichment analyses
-- Breast Cancer Glyco30 classifier code
+- Breast Cancer Glyco50 classifier code
+- Glyco50 Cancer Progression Maps
